@@ -676,9 +676,11 @@ async function supaFetch(path, options = {}) {
     'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
     ...(options.headers || {})
   };
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers, cache: 'no-store' });
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
     throw new Error(`Supabase error ${res.status}: ${errText}`);
@@ -698,7 +700,7 @@ async function tryAutoConnect() {
     return;
   }
   try {
-    await supaFetch('class_p_stock?select=id&limit=1');
+    await supaFetch(`class_p_stock?select=id&limit=1&_=${Date.now()}`);
     dbConnected = true;
     setDbStatus('on', `Terhubung ke database — ${SUPABASE_URL.replace('https://','').split('.')[0]}`);
     await loadFromDb();
@@ -716,7 +718,7 @@ async function loadFromDb() {
     let allRows = [];
     let from = 0; const pageSize = 1000;
     while (true) {
-      const chunk = await supaFetch(`class_p_stock?select=*&order=id.asc&offset=${from}&limit=${pageSize}`);
+      const chunk = await supaFetch(`class_p_stock?select=*&order=id.asc&offset=${from}&limit=${pageSize}&_=${Date.now()}`);
       if (!chunk || chunk.length === 0) break;
       allRows = allRows.concat(chunk);
       if (chunk.length < pageSize) break;
