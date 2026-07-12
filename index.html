@@ -1048,11 +1048,6 @@
       <div class="chart-wrap"><canvas id="countChart"></canvas></div>
     </div>
 
-    <div class="chart-section" id="wrTrendSection">
-      <h3><svg class="section-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8a1 1 0 0 1 1 1v16l-4-2-4 2-4-2V4a1 1 0 0 1 1-1z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></svg>Trend Amount WR Detail (3 Kategori)</h3>
-      <div class="chart-wrap"><canvas id="wrTrendChart"></canvas></div>
-    </div>
-
     <div class="chart-section">
       <h3><svg class="section-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"/></svg>Data Riwayat Harian</h3>
       <div class="snapshot-table-wrap">
@@ -1093,6 +1088,7 @@
 
   <div class="toolbar" style="margin:16px 28px 0">
     <input type="text" class="search-box" id="wrSearchBox" placeholder="🔍 Cari WR No, Stock Code, Equip No, Item Name..." oninput="applyWrFilters()">
+    <button class="btn-print" id="wrTrendToggleBtn" onclick="toggleWrTrendChart()"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Tampilkan Trend</button>
     <button class="btn-export" onclick="exportWrExcel()">⬇ Export Excel</button>
   </div>
 
@@ -1118,6 +1114,11 @@
       <div class="kpi-sub">Stok fisik memang tidak ada sama sekali</div>
       <div class="kpi-amount" id="wrScNotReadyZeroAmt">—</div>
     </div>
+  </div>
+
+  <div class="chart-section" id="wrTrendSection" style="margin:16px 28px 0;display:none">
+    <h3><svg class="section-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8a1 1 0 0 1 1 1v16l-4-2-4 2-4-2V4a1 1 0 0 1 1-1z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></svg>Trend Amount WR Detail (3 Kategori)</h3>
+    <div class="chart-wrap"><canvas id="wrTrendChart"></canvas></div>
   </div>
 
   <div class="table-wrap">
@@ -2435,6 +2436,56 @@ function exportExcel() {
 // ====== PAGE NAVIGATION (Dashboard <-> Trend <-> WR Detail) ======
 let trendLoaded = false;
 let wrPageInitialized = false;
+let wrTrendLoaded = false;
+let wrTrendVisible = false;
+
+async function toggleWrTrendChart() {
+  wrTrendVisible = !wrTrendVisible;
+  const section = document.getElementById('wrTrendSection');
+  const btn = document.getElementById('wrTrendToggleBtn');
+  if (wrTrendVisible) {
+    section.style.display = 'block';
+    btn.innerHTML = '<svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><path d="M3 3l18 18"/></svg>Sembunyikan Trend';
+    if (!wrTrendLoaded) {
+      wrTrendLoaded = true;
+      await loadWrTrendSnapshots();
+    } else {
+      renderWrTrendChart();
+    }
+  } else {
+    section.style.display = 'none';
+    btn.innerHTML = '<svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Tampilkan Trend';
+  }
+}
+
+async function loadWrTrendSnapshots() {
+  if (!dbConnected) {
+    const section = document.getElementById('wrTrendSection');
+    section.innerHTML = `
+      <h3><svg class="section-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8a1 1 0 0 1 1 1v16l-4-2-4 2-4-2V4a1 1 0 0 1 1-1z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></svg>Trend Amount WR Detail (3 Kategori)</h3>
+      <div style="text-align:center;padding:30px 10px;color:var(--text-muted);font-size:12px">Database belum terhubung.</div>`;
+    return;
+  }
+  try {
+    let wrAll = [];
+    let wrFrom = 0; const pageSize = 1000;
+    while (true) {
+      const chunk = await supaFetch(`wr_daily_snapshot?select=*&order=snapshot_date.asc&offset=${wrFrom}&limit=${pageSize}`);
+      if (!chunk || chunk.length === 0) break;
+      wrAll = wrAll.concat(chunk);
+      if (chunk.length < pageSize) break;
+      wrFrom += pageSize;
+    }
+    wrTrendSnapshots = wrAll;
+    renderWrTrendChart();
+  } catch (err) {
+    const section = document.getElementById('wrTrendSection');
+    section.innerHTML = `
+      <h3><svg class="section-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8a1 1 0 0 1 1 1v16l-4-2-4 2-4-2V4a1 1 0 0 1 1-1z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></svg>Trend Amount WR Detail (3 Kategori)</h3>
+      <div style="text-align:center;padding:30px 10px;color:var(--red);font-size:12px">Gagal memuat data: ${err.message}</div>`;
+  }
+}
+
 function switchPage(page) {
   document.getElementById('viewDashboard').style.display = page === 'dashboard' ? 'block' : 'none';
   document.getElementById('viewTrend').style.display = page === 'trend' ? 'block' : 'none';
@@ -2495,19 +2546,6 @@ async function loadTrendSnapshots() {
       from += pageSize;
     }
     trendSnapshots = all;
-
-    // Muat juga snapshot WR Detail (3 kategori)
-    let wrAll = [];
-    let wrFrom = 0;
-    while (true) {
-      const chunk = await supaFetch(`wr_daily_snapshot?select=*&order=snapshot_date.asc&offset=${wrFrom}&limit=${pageSize}`);
-      if (!chunk || chunk.length === 0) break;
-      wrAll = wrAll.concat(chunk);
-      if (chunk.length < pageSize) break;
-      wrFrom += pageSize;
-    }
-    wrTrendSnapshots = wrAll;
-
     setTrendDbStatus('on', `Terhubung — ${trendSnapshots.length} hari data riwayat tersedia`);
     renderTrendAll();
   } catch (err) {
@@ -2541,7 +2579,6 @@ function renderTrendAll() {
   renderTrendCards();
   renderTrendAmountChart();
   renderTrendCountChart();
-  renderWrTrendChart();
   renderSnapshotTable();
 }
 
