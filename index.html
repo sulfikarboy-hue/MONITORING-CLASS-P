@@ -571,6 +571,14 @@
   .remark-partial { background: var(--amber-glow); color: var(--amber); border: 1px solid rgba(242,163,60,0.3); }
   .remark-notready{ background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
 
+  .aging-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 10px; white-space: nowrap; }
+  .aging-tag::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .aging-030  { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .aging-3160 { background: var(--amber-glow); color: var(--amber); border: 1px solid rgba(242,163,60,0.3); }
+  .aging-6190 { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
+  .aging-90up { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .aging-none { background: rgba(100,116,139,0.15); color: var(--text-muted); border: 1px solid var(--border); }
+
   .jd-tag {
     font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 10px;
     white-space: nowrap; letter-spacing: 0.02em;
@@ -1129,7 +1137,8 @@
       <table id="wrTable">
         <thead>
           <tr>
-            <th onclick="sortWrTable('DISTRICT')">District <span class="sort-icon"></span></th>
+            <th onclick="sortWrTable('AGING')">Aging <span class="sort-icon"></span></th>
+            <th onclick="sortWrTable('LT POSTING')">LT Posting <span class="sort-icon"></span></th>
             <th onclick="sortWrTable('AUTHSD DATE')">Authsd Date <span class="sort-icon"></span></th>
             <th onclick="sortWrTable('EQUIP NO')">Equip No <span class="sort-icon"></span></th>
             <th onclick="sortWrTable('WR NO')">WR No <span class="sort-icon"></span></th>
@@ -2269,19 +2278,23 @@ function openModal(r) {
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="color:var(--text-muted);font-size:10.5px">
           <th style="text-align:left;padding:4px 6px">WR No</th>
-          <th style="text-align:left;padding:4px 6px">District</th>
+          <th style="text-align:left;padding:4px 6px">LT Posting</th>
           <th style="text-align:left;padding:4px 6px">Equip No</th>
           <th style="text-align:left;padding:4px 6px">AUTHSD Date</th>
           <th style="text-align:right;padding:4px 6px">Qty Req</th>
         </tr></thead>
         <tbody>
-          ${wrList.map(w => `<tr style="border-top:1px solid var(--border)">
+          ${wrList.map(w => {
+            const dTs = getDateTs(w['AUTHSD DATE']);
+            const lt = isFinite(dTs) ? Math.floor((Date.now() - dTs) / 86400000) : null;
+            return `<tr style="border-top:1px solid var(--border)">
             <td style="padding:5px 6px;color:var(--teal);font-weight:600">${w['WR NO']||'—'}</td>
-            <td style="padding:5px 6px;color:var(--text-dim)">${w['DISTRICT']||'—'}</td>
+            <td style="padding:5px 6px;color:${lt===null?'var(--text-muted)':lt>60?'var(--red)':lt>30?'var(--amber)':'var(--text-dim)'}">${lt===null?'—':lt+'d'}</td>
             <td style="padding:5px 6px;color:var(--text-dim)">${w['EQUIP NO']||'—'}</td>
-            <td style="padding:5px 6px;color:var(--text-dim)">${w['AUTHSD DATE']||'—'}</td>
+            <td style="padding:5px 6px;color:var(--text-dim)">${formatDateDDMMYY(w['AUTHSD DATE'])}</td>
             <td style="padding:5px 6px;text-align:right">${w['QTY REQ']||0}</td>
-          </tr>`).join('')}
+          </tr>`;
+          }).join('')}
         </tbody>
       </table>
     `;
@@ -2894,7 +2907,15 @@ function applyWrFilters() {
     const amountPrice = price * qtyReq;
     const remarkLabel = wrRemarkById[r['ID']] || 'Not Ready Posting';
     const remarkCls = remarkLabel === 'Ready Posting' ? 'remark-ready' : 'remark-notready';
-    return { ...r, 'SOH WH': sohWh, 'PRICE': price, 'AMOUNT PRICE': amountPrice, 'REMARK': remarkLabel, '_remarkCls': remarkCls, '_dateTs': getDateTs(r['AUTHSD DATE']) };
+    const dateTs = getDateTs(r['AUTHSD DATE']);
+    const ltPosting = isFinite(dateTs) ? Math.floor((Date.now() - dateTs) / 86400000) : null;
+    let aging, agingCls;
+    if (ltPosting === null) { aging = '—'; agingCls = 'aging-none'; }
+    else if (ltPosting > 90) { aging = '90 UP'; agingCls = 'aging-90up'; }
+    else if (ltPosting > 61) { aging = '61-90'; agingCls = 'aging-6190'; }
+    else if (ltPosting > 30) { aging = '31-60'; agingCls = 'aging-3160'; }
+    else { aging = '0-30'; agingCls = 'aging-030'; }
+    return { ...r, 'SOH WH': sohWh, 'PRICE': price, 'AMOUNT PRICE': amountPrice, 'REMARK': remarkLabel, '_remarkCls': remarkCls, '_dateTs': dateTs, 'LT POSTING': ltPosting, 'AGING': aging, '_agingCls': agingCls };
   });
   if (q) {
     data = data.filter(r =>
@@ -2902,7 +2923,6 @@ function applyWrFilters() {
       String(r['STOCK CODE']||'').toLowerCase().includes(q) ||
       String(r['EQUIP NO']||'').toLowerCase().includes(q) ||
       String(r['ITEM NAME']||'').toLowerCase().includes(q) ||
-      String(r['DISTRICT']||'').toLowerCase().includes(q) ||
       String(r['MNEMONIC CURRENT']||'').toLowerCase().includes(q) ||
       String(r['PN CURRENT']||'').toLowerCase().includes(q)
     );
@@ -2984,11 +3004,12 @@ function renderWrTable() {
   const rows = wrFiltered.slice(start, start + WR_PAGE_SIZE);
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="17"><div class="no-data"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:40px;height:40px"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div><div>Tidak ada data ditemukan</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="18"><div class="no-data"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:40px;height:40px"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg></div><div>Tidak ada data ditemukan</div></div></td></tr>`;
   } else {
     tbody.innerHTML = rows.map(r => {
       return `<tr>
-      <td>${r['DISTRICT']||'—'}</td>
+      <td><span class="aging-tag ${r['_agingCls']}">${r['AGING']}</span></td>
+      <td class="num" style="color:${r['LT POSTING']===null?'var(--text-muted)':r['LT POSTING']>60?'var(--red)':r['LT POSTING']>30?'var(--amber)':'var(--text-dim)'}">${r['LT POSTING']===null?'—':r['LT POSTING']+'d'}</td>
       <td>${formatDateDDMMYY(r['AUTHSD DATE'])}</td>
       <td>${r['EQUIP NO']||'—'}</td>
       <td style="color:var(--teal);font-weight:600">${r['WR NO']||'—'}</td>
@@ -3038,7 +3059,8 @@ function wrGoToPage(p) {
 function exportWrExcel() {
   if (!wrFiltered.length) { alert('Tidak ada data WR untuk diexport.'); return; }
   const rows = wrFiltered.map(r => ({
-    'District': r['DISTRICT'],
+    'Aging': r['AGING'],
+    'LT Posting (hari)': r['LT POSTING'],
     'Authsd Date': formatDateDDMMYY(r['AUTHSD DATE']),
     'Equip No': r['EQUIP NO'],
     'WR No': r['WR NO'],
