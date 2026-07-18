@@ -1455,6 +1455,7 @@ async function loadFromDb() {
         'AMOUNT CONSIGN': Number(r.amount_consign) || 0,
         'PRICE CODE': r.price_code || '',
         'BIN LOC': r.bin_loc || '',
+        'EXPENSE ELEMENT': r.expense_element || '',
       }));
       status.style.color = '#22c55e';
       status.textContent = `✅ ${allData.length} item dimuat dari database.`;
@@ -1514,6 +1515,13 @@ function getDuesIn(stockCode) {
   const code = String(stockCode||'').trim();
   const found = allData.find(r => String(r['STOCK CODE']||'').trim() === code);
   return found ? (found['DUES IN'] || 0) : 0;
+}
+
+// Expense Element: ambil dari data stock utama (allData) berdasarkan Stock Code — khusus untuk export Excel
+function getExpenseElement(stockCode) {
+  const code = String(stockCode||'').trim();
+  const found = allData.find(r => String(r['STOCK CODE']||'').trim() === code);
+  return found ? (found['EXPENSE ELEMENT'] || '') : '';
 }
 
 // ====== Parsing & format tanggal AUTHSD DATE ======
@@ -1801,6 +1809,7 @@ async function saveToDb(rows, filename) {
       amount_consign: r['AMOUNT CONSIGN'] || 0,
       price_code: String(r['PRICE CODE'] || ''),
       bin_loc: String(r['BIN LOC'] || ''),
+      expense_element: String(r['EXPENSE ELEMENT'] || ''),
     }));
 
     for (let i = 0; i < payload.length; i += batchSize) {
@@ -2201,23 +2210,23 @@ function renderTable() {
       ? wrList.map(w => w['WR NO']).filter(Boolean).join(', ')
       : '';
     return `<tr class="${cls}" onclick="openModal(${JSON.stringify(r).replace(/"/g,'&quot;')})">
-      <td class="row-num">${rowNum}</td>
-      <td class="stock-code">${r['STOCK CODE']}</td>
-      <td style="color:var(--text-dim);font-size:11px">${r['MNEMONIC']||'—'}</td>
-      <td style="color:var(--teal);font-size:11px;font-weight:600" title="${wrList.length>1?wrList.length+' No WR':''}">${wrDisplay || '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td class="row-num" style="text-align:center">${rowNum}</td>
+      <td class="stock-code" style="text-align:center">${r['STOCK CODE']}</td>
+      <td style="color:var(--text-dim);font-size:11px;text-align:center">${r['MNEMONIC']||'—'}</td>
+      <td style="color:var(--teal);font-size:11px;font-weight:600;text-align:center" title="${wrList.length>1?wrList.length+' No WR':''}">${wrDisplay || '<span style="color:var(--text-muted)">—</span>'}</td>
       <td class="item-name" title="${r['ITEM NAME']}">${r['ITEM NAME']}</td>
       <td class="desc" title="${r['DESCRIPTION']}">${r['DESCRIPTION']}</td>
-      <td class="bin-loc">${binLoc}</td>
-      <td style="color:var(--amber);font-size:11px;font-weight:700">${r['CLASS']||'P'}</td>
-      <td class="num">${fmtQty(r['TOTAL SOH'])}</td>
-      <td class="num" style="color:${(r['MIT']||0)>0?'#3b82f6':'#64748b'}">${r['MIT']||0}</td>
-      <td class="num" style="color:${(r['DUES OUT']||0)>0?'#F2A33C':'#64748b'}">${fmtQty(r['DUES OUT'])}</td>
-      <td class="num" style="color:${(r['DUES IN']||0)>0?'#22c55e':'#64748b'}">${fmtQty(r['DUES IN']||0)}</td>
+      <td class="bin-loc" style="text-align:center">${binLoc}</td>
+      <td style="color:var(--amber);font-size:11px;font-weight:700;text-align:center">${r['CLASS']||'P'}</td>
+      <td class="num" style="text-align:center">${fmtQty(r['TOTAL SOH'])}</td>
+      <td class="num" style="text-align:center;color:${(r['MIT']||0)>0?'#3b82f6':'#64748b'}">${r['MIT']||0}</td>
+      <td class="num" style="text-align:center;color:${(r['DUES OUT']||0)>0?'#F2A33C':'#64748b'}">${fmtQty(r['DUES OUT'])}</td>
+      <td class="num" style="text-align:center;color:${(r['DUES IN']||0)>0?'#22c55e':'#64748b'}">${fmtQty(r['DUES IN']||0)}</td>
       <td class="num">Rp ${fmtRpFull(r['ISSUE PRICE'])}</td>
       <td class="amount">Rp ${fmtRpFull(displayAmount)}${isIncomingRow?' <span style="color:#a855f7;font-size:9px">(incoming)</span>':''}</td>
-      <td style="color:#64748b;font-size:11px">${r['UOI']}</td>
-      <td><span class="badge ${badge}">${status}</span></td>
-      <td><span class="jd-tag ${getJobdesk(status).cls}">${getJobdesk(status).icon} ${getJobdesk(status).dept}</span></td>
+      <td style="color:#64748b;font-size:11px;text-align:center">${r['UOI']}</td>
+      <td style="text-align:center"><span class="badge ${badge}">${status}</span></td>
+      <td style="text-align:center"><span class="jd-tag ${getJobdesk(status).cls}">${getJobdesk(status).icon} ${getJobdesk(status).dept}</span></td>
     </tr>`;
   }).join('');
 
@@ -2434,6 +2443,7 @@ function processFile(file) {
         'AMOUNT CONSIGN': parseFloat(r['AMOUNT CONSIGN']||0),
         'PRICE CODE': (r['PRICE CODE']||'').toString(),
         'BIN LOC': (r['BIN LOC']||r['Bin Loc']||r['BIN LOCATION']||'').toString(),
+        'EXPENSE ELEMENT': (r['EXPENSE ELEMENT']||r['Expense Element']||'').toString(),
       }));
       const now = new Date();
       document.getElementById('updateDateLabel').textContent = `Data: ${now.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}`;
@@ -3170,6 +3180,7 @@ function exportWrExcel() {
     'MIT': getMit(r['STOCK CODE']),
     'Dues In': getDuesIn(r['STOCK CODE']),
     'Remark': r['REMARK'],
+    'Expense Element': getExpenseElement(r['STOCK CODE']),
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
   const colWidths = Object.keys(rows[0]||{}).map(k => ({wch: Math.max(k.length, 12)}));
